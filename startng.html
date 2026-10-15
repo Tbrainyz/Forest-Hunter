@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>start.ng (local mock)</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="src/styles.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body class="platform">
+  <header class="nav">
+    <strong>start.ng</strong>
+    <span class="badge">local mock</span>
+    <span class="muted" id="navUser"></span>
+  </header>
+
+  <main>
+    <section id="signin" hidden>
+      <h2>Sign in</h2>
+      <p class="muted">This page stands in for start.ng until it's ready. Pick a test account.</p>
+      <div class="users" id="users"></div>
+    </section>
+
+    <section id="profile" hidden>
+      <div class="card">
+        <canvas id="preview" width="260" height="320"></canvas>
+        <div>
+          <h2 id="hello"></h2>
+          <p class="muted">This is your central style. Any start.ng game that uses it updates instantly, even in another tab.</p>
+          <form id="styleForm" class="fields">
+            <label>Shirt <input type="color" name="primaryColor"></label>
+            <label>Pants &amp; hat <input type="color" name="secondaryColor"></label>
+            <label>Skin <input type="color" name="skinColor"></label>
+            <label>Hat <select name="hat"></select></label>
+            <label>Accessory <select name="accessory"></select></label>
+          </form>
+          <div class="actions">
+            <a class="btn" href="index.html" target="game">Play Forest Hunter →</a>
+            <button class="btn ghost" id="signout">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="src/startng-page.js"></script>
+</body>
+</html>
