@@ -1,8 +1,8 @@
 # Forest Hunter
 
-A small three.js first-person hunting game built for the start.ng platform. Scan the forest for animals, zoom in with the scope to identify them, and shoot before time or ammo runs out. You have 90 seconds and 15 shots. Your hunter is dressed in the signed-in user's **central start.ng style** and updates live when that style changes.
+A small three.js first-person hunting game for [start.ng](https://start.ng). Scan the forest for animals, zoom in with the scope to identify them, and shoot before the timer or your ammo runs out. The game is endless: every level has a mission and gets harder, rounds pay coins, and coins buy upgrades.
 
-There are 9 species, each with its own points and speed. **The wolf is protected: shooting one costs you 50 points.** Trees block your shot and your path. Animals bolt when you fire nearby, or when you get too close while moving: sprinting spooks them from about 24 m, walking from 12 m, and creeping while scoped from 6 m. Standing still keeps you hidden, so stalk slowly to get a closer shot.
+There are 10 species, each with its own points and speed. **The wolf is protected: shooting one costs you 50 points.** The rare **White Stag** is worth 150. Trees block your shot and your path. Animals bolt when you fire nearby or when you get too close while moving, so stalk slowly.
 
 ## Run locally
 
@@ -10,11 +10,9 @@ There are 9 species, each with its own points and speed. **The wolf is protected
 npm start
 ```
 
-Then open http://localhost:5173. No install step is needed. three.js loads from a CDN, so you need to be online.
+Then open http://localhost:5173. There is no install step. three.js loads from jsDelivr, so you need to be online.
 
-1. Click **Sign in on start.ng**. This opens `startng.html`, a mock of the platform.
-2. Pick a test user, then click **Play Forest Hunter**.
-3. Keep both tabs open. Change colours or the hat on the start.ng tab and watch the hunter change on the menu screen.
+Locally the game runs as a **guest**: start.ng's player, character and leaderboard only work once it is live at `forest-hunter.start.ng`. Everything else (levels, coins, upgrades, personal best) works locally.
 
 ## Controls
 
@@ -29,27 +27,49 @@ Then open http://localhost:5173. No install step is needed. three.js loads from 
 | Esc | Pause |
 | Touch | Drag to look, tap to shoot, hold Walk to move forward, hold Zoom to scope in |
 
+## Levels, coins and upgrades
+
+Each level has a mission, and everything gets harder as you climb: animals run faster and notice you from further away, you get fewer shots and less time, and more protected wolves appear.
+
+| Mission | Example |
+| --- | --- |
+| Score | Score 76 points |
+| Bag | Bag Deer ×2 |
+| Distance | Hit an animal from 27 m or more |
+| Streak | Hit 3 in a row without missing |
+| Clean | Score 90 without hitting a protected animal |
+| Boss (every 5th level) | Find and bag the rare **White Stag** |
+
+Clear the mission before time or ammo runs out to move up. If you fail you retry the level with a new mission. Hits earn bonus points for distance (+2 per 10 m) and for running targets (+10). Coins buy four upgrades (up to rank 5): Steady scope, Extra ammo, Soft steps and Quick bolt. Level, coins and upgrades are saved per player in the browser (`localStorage`).
+
+## start.ng
+
+- **Player and character:** `src/platform.js` asks start.ng's connect page who is playing (`startng:whoami`) and dresses the hunter in their character style. Guests get start.ng's guest look.
+- **Leaderboard:** `startng.json` defines two columns, "Best score" and "Level reached". When a signed-in player finishes a round, `saveScore` sends `{ score, level }`, and the end screen shows the top 5.
+- **Cover:** `cover.png` (16:10) is the card picture on start.ng.
+
+### Publish and update
+
+1. Push this repo to GitHub (public, `index.html` at the top).
+2. Check it: `curl -X POST https://api.start.ng/games/check -H "Content-Type: application/json" -d '{"repo_url":"https://github.com/Tbrainyz/Forest-Hunter","name":"forest-hunter"}'`
+3. Publish with the same body to `https://api.start.ng/games/publish`, then open the `approve_url` it returns and approve once.
+4. After that, `git push` updates the live game within a minute or two.
+
 ## Project layout
 
 | File | Role |
 | --- | --- |
-| `src/game.js` | The game: scene, aiming, rounds, input, HUD. |
-| `src/animals.js` | The `SPECIES` list (points, speed, size, count, protected) and `createAnimal`. Add an animal by adding one entry. |
+| `index.html` | The page, HUD and overlay. |
+| `src/game.js` | The game: scene, aiming, rounds, input, HUD, shop. |
+| `src/animals.js` | The `SPECIES` list (points, speed, size, count, protected, rare) and `createAnimal`. |
+| `src/levels.js` | Level difficulty, missions and upgrade costs. |
+| `src/progress.js` | Per-player level, coins and upgrades in `localStorage`. |
+| `src/scores.js` | Personal best in `localStorage`. |
 | `src/character.js` | Builds the hunter and applies a start.ng style. |
-| `src/scores.js` | Per-user best scores and the leaderboard (stored in this browser). |
-| `src/platform.js` | The only platform import the game uses. Point it at the real SDK when start.ng ships. |
-| `src/startng-mock.js` | Fake SDK: `getCurrentUser`, `onUserChange`, `signIn`, `signOut`, `updateStyle`. Backed by localStorage. |
-| `startng.html` + `src/startng-page.js` | Mock start.ng site: sign in and edit your central style. |
+| `src/platform.js` | All start.ng calls (player, scores, leaderboard). |
+| `startng.json` | Leaderboard columns. |
 | `server.js` | Zero-dependency static server for `npm start`. |
-
-The style shape the game expects:
-
-```js
-{ primaryColor: '#ff6b6b', secondaryColor: '#2b2f4a', skinColor: '#8d5524', hat: 'cap', accessory: 'backpack' }
-// hat: none | cap | beanie | tophat | crown
-// accessory: none | glasses | scarf | backpack
-```
 
 ## Tweaking
 
-At the top of `src/game.js`: `ROUND_TIME`, `AMMO`, `RELOAD`, `SCOPE_FOV`, `TREES`, `WALK`, `SPRINT`, `SPOOK`.
+At the top of `src/game.js`: `RELOAD`, `SCOPE_FOV`, `TREES`, `WALK`, `SPRINT`, `SPOOK`. Level difficulty (time, shots, speed) is in `difficulty()` in `src/levels.js`.

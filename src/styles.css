@@ -140,3 +140,12 @@ body { background: var(--bg); }
 @media (max-width: 560px) { .guide { display: none; } }
 
 .walk-btn { right: auto; left: 18px; }
+
+#mission { position: fixed; left: 50%; top: 74px; transform: translateX(-50%); max-width: 90vw; text-align: center; font-size: 14px; font-weight: 600; background: var(--panel); border-radius: 999px; padding: 6px 16px; pointer-events: none; }
+.shop { margin: 14px 0 4px; text-align: left; }
+.shop-head { font-weight: 700; margin-bottom: 6px; }
+.shop-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.shop-row small { opacity: 0.7; }
+.buy { margin: 0; padding: 6px 14px; font-size: 14px; border-radius: 8px; white-space: nowrap; }
+.buy:disabled { opacity: 0.4; cursor: default; }
+.overlay .panel { max-height: 92vh; overflow-y: auto; }

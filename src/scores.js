@@ -1,29 +1,19 @@
-// Per-user best scores for Forest Hunter, kept in this browser.
+// Personal best, kept in this browser and shown in the HUD.
+// The shared leaderboard lives on start.ng (see platform.js).
 const KEY = 'foresthunter:scores';
 
 function all() {
-  try {
-    return JSON.parse(localStorage.getItem(KEY)) || {};
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
 
 export function getBest(userId) {
-  return all()[userId]?.score ?? 0;
+  return all()[userId] ?? 0;
 }
 
 export function submit(user, score) {
   const scores = all();
-  const prev = scores[user.id]?.score ?? 0;
-  const isBest = score > prev;
-  scores[user.id] = { score: Math.max(prev, score), name: user.displayName, color: user.style.primaryColor };
-  localStorage.setItem(KEY, JSON.stringify(scores));
-  return { best: Math.max(prev, score), isBest };
-}
-
-export function top(n = 5) {
-  return Object.values(all())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, n);
+  const prev = scores[user.id] ?? 0;
+  scores[user.id] = Math.max(prev, score);
+  try { localStorage.setItem(KEY, JSON.stringify(scores)); } catch {}
+  return { best: scores[user.id], isBest: score > prev };
 }

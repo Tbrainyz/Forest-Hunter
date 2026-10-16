@@ -11,6 +11,8 @@ export const SPECIES = [
   { name: 'Deer',     color: '#9b6b43', l: 1.6, h: 0.8, w: 0.5,   lg: 0.9,  speed: 4,   points: 40, count: 3, ear: 0.2, ant: 0.5 },
   { name: 'Elk',      color: '#6e4a2e', l: 2.2, h: 1.1, w: 0.7,   lg: 1.3,  speed: 3.5, points: 60, count: 1, ear: 0.25, ant: 1.2 },
   { name: 'Bear',     color: '#2d2018', l: 2,   h: 1.2, w: 1,     lg: 0.6,  speed: 2.8, points: 80, count: 1, ear: 0.2 },
+  // Rare: spawns on boss levels (and sometimes others). Glows faintly, bolts early, worth a lot.
+  { name: 'White Stag', color: '#f2f2ee', l: 2, h: 1, w: 0.6, lg: 1.2, speed: 5, points: 150, count: 0, ear: 0.25, ant: 1, rare: true, glow: true },
   // Protected species: shooting one costs you points.
   { name: 'Wolf',     color: '#808389', l: 1.3, h: 0.6, w: 0.4,   lg: 0.6,  speed: 4.2, points: -50, count: 2, ear: 0.2, tail: 2, protected: true },
 ];
@@ -18,7 +20,7 @@ export const SPECIES = [
 /** Builds a blocky animal facing +z. Returns { g, legs } where g is the Group. */
 export function createAnimal(d) {
   const g = new THREE.Group();
-  const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
+  const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...(d.glow ? { emissive: '#bcd4ff', emissiveIntensity: 0.3 } : {}) });
   const body = mat(d.color);
   const dark = mat(new THREE.Color(d.color).multiplyScalar(0.6));
   const horn = mat('#d8c9a0');

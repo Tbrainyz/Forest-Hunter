@@ -3,10 +3,10 @@ import * as platform from './platform.js';
 import * as scores from './scores.js';
 import { createCharacter } from './character.js';
 import { SPECIES, createAnimal } from './animals.js';
+import * as progress from './progress.js';
+import { UPGRADES, MAX_RANK, buildLevel, updateMission, describe, reward } from './levels.js';
 
-const ROUND_TIME = 90; // seconds
-const AMMO = 15;
-const RELOAD = 0.6; // seconds between shots
+const RELOAD = 0.6; // base seconds between shots (Quick bolt makes it shorter)
 const WORLD = 85; // animals stay inside this radius
 const FOV = 75;
 const SCOPE_FOV = 18;
@@ -22,6 +22,7 @@ const ui = {
   score: $('score'), ammo: $('ammo'), time: $('time'), best: $('best'),
   overlay: $('overlay'), title: $('title'), message: $('message'), action: $('action'), board: $('board'),
   scope: $('scope'), dot: $('dot'), label: $('label'), msg: $('msg'), zoomBtn: $('zoomBtn'), walkBtn: $('walkBtn'),
+  auth: $('authlink'), level: $('level'), coins: $('coins'), mission: $('mission'), shop: $('shop'),
 };
 
 // Field guide (bottom-left)
@@ -116,10 +117,11 @@ function spawnAnimals() {
   for (const a of animals) scene.remove(a.g);
   animals = [];
   for (const d of SPECIES) {
-    for (let i = 0; i < d.count; i++) {
+    const count = d.rare ? (lvl.stag ? 1 : 0) : d.protected ? lvl.diff.wolves : d.count;
+    for (let i = 0; i < count; i++) {
       const { g, legs } = createAnimal(d);
       const t = Math.random() * Math.PI * 2;
-      const r = 18 + Math.random() * 50;
+      const r = d.rare ? 35 + Math.random() * 40 : 18 + Math.random() * 50;
       g.position.set(Math.cos(t) * r, 0, Math.sin(t) * r);
       const a = { g, legs, d, fleeing: 0, wait: Math.random() * 3, dead: false, deadFor: 0, tx: 0, tz: 0 };
       g.userData.animal = a;
@@ -155,7 +157,7 @@ function updateAnimals(dt, time) {
     }
     const running = a.fleeing > 0;
     if (running) a.fleeing -= dt;
-    const step = a.d.speed * (running ? 1.5 : 0.35) * dt;
+    const step = a.d.speed * lvl.diff.speed * (running ? 1.5 : 0.35) * dt;
     p.x += (dx / dist) * step;
     p.z += (dz / dist) * step;
     a.g.rotation.y = Math.atan2(dx, dz);
@@ -215,11 +217,15 @@ let time = 0; // clock, always ticking
 let overAt = -1;
 let yaw = 0, pitch = 0, fov = FOV;
 let score, ammo, left, cooldown, bagged, protectedHits;
+let prog = progress.fresh(); // level, coins and upgrade ranks for the signed-in user
+let lvl = buildLevel(1); // current level: difficulty + mission
+let streak = 0, clearing = false;
+const shots = () => lvl.diff.ammo + 2 * prog.up.ammo;
 let hadLock = false;
 let labelTimer = 0;
 
 function resetRound() {
-  score = 0; ammo = AMMO; left = ROUND_TIME; cooldown = 0; bagged = 0; protectedHits = 0;
+  score = 0; ammo = shots(); left = lvl.diff.time; cooldown = 0; bagged = 0; protectedHits = 0; streak = 0; clearing = false;
   yaw = 0; pitch = 0;
   player.set(0, 1.7, 0);
   updateHud();
@@ -229,6 +235,9 @@ function updateHud() {
   ui.score.textContent = score;
   ui.ammo.textContent = ammo;
   ui.time.textContent = Math.ceil(left);
+  ui.level.textContent = prog.level;
+  ui.coins.textContent = prog.coins;
+  ui.mission.textContent = `Level ${prog.level} · ${describe(lvl.mission)}`;
 }
 
 function lock() {
@@ -261,45 +270,79 @@ function end() {
   overAt = time;
   hadLock = false;
   document.exitPointerLock?.();
-  const { best, isBest } = scores.submit(user, score);
+  const cleared = lvl.mission.done;
+  const oldLevel = prog.level;
+  const goal = describe(lvl.mission);
+  const earned = reward(oldLevel, score, cleared);
+  prog.coins += earned;
+  if (cleared) prog.level++;
+  progress.save(user.id, prog);
+  const { best } = scores.submit(user, score);
   ui.best.textContent = best;
   ui.scope.hidden = true;
   ui.label.textContent = '';
+  lvl = buildLevel(prog.level); // next level, or a fresh mission for a retry
+  updateHud();
   showOverlay({
-    title: isBest ? 'New best!' : 'Hunt over',
-    message: `${user.displayName}, you scored ${score}. ${bagged} animal${bagged === 1 ? '' : 's'} bagged${protectedHits ? `, ${protectedHits} protected` : ''}.`,
-    button: 'Hunt again',
-    board: true,
+    title: cleared ? `Level ${oldLevel} cleared!` : `Level ${oldLevel} failed`,
+    message: `${user.displayName}: ${score} points, ${bagged} bagged${protectedHits ? ` (${protectedHits} protected)` : ''}. +${earned} coins.${cleared ? '' : ` Goal was: ${goal}.`}`,
+    button: cleared ? `Start level ${prog.level}` : 'Retry level',
+    board: false,
+    shop: true,
   });
+  saveRun(score, prog.level).then(loadBoard);
 }
 
 function shoot() {
   if (state !== 'running' || ammo <= 0 || cooldown > 0) return;
   ammo--;
-  cooldown = RELOAD;
+  cooldown = RELOAD * (1 - 0.12 * prog.up.reload);
   bang();
   pitch += 0.015; // recoil
   const a = pick();
+  let dist = 0;
   if (a) {
+    dist = Math.hypot(a.g.position.x - player.x, a.g.position.z - player.z);
+    let pts = a.d.points;
+    // Bonuses for long shots and for hitting an animal that is running.
+    if (!a.d.protected) pts += Math.floor(dist / 10) * 2 + (a.fleeing > 0 ? 10 : 0);
     a.dead = true;
     a.deadFor = 0;
-    score += a.d.points;
+    score += pts;
     bagged++;
     if (a.d.protected) {
       protectedHits++;
-      say(`Protected ${a.d.name}! ${a.d.points}`, 'bad');
+      say(`Protected ${a.d.name}! ${pts}`, 'bad');
     } else {
-      say(`${a.d.name} +${a.d.points}`, 'good');
+      say(`${a.d.name} +${pts}${dist >= 20 ? ` · ${Math.round(dist)} m` : ''}`, 'good');
     }
   }
+  streak = a && !a.d.protected ? streak + 1 : 0;
+  updateMission(lvl.mission, { hit: a, dist, streak, score, protectedHits });
   for (const x of animals) {
     if (!x.dead && x.g.position.distanceTo(player) < 45) flee(x);
   }
   updateHud();
-  if (ammo === 0) setTimeout(end, 1500);
+  if (!clearing && (lvl.mission.done || ammo === 0)) {
+    clearing = true;
+    setTimeout(end, lvl.mission.done ? 1200 : 1500);
+  }
 }
 
 // --- Overlay / HUD ---------------------------------------------------------------
+
+// The shared leaderboard comes from start.ng (empty when the game isn't running on start.ng).
+async function loadBoard() {
+  const entries = await platform.getLeaderboard(5);
+  if (ui.overlay.hidden) return;
+  ui.board.replaceChildren(...entries.map(leaderboardRow));
+}
+
+async function saveRun(runScore, runLevel) {
+  if (!user.signedIn) return;
+  const r = await platform.saveScore({ score: Math.max(0, runScore), level: runLevel });
+  if (r?.rank && state === 'over') ui.message.textContent += ` Leaderboard rank: #${r.rank}.`;
+}
 
 function leaderboardRow(entry, i) {
   const li = document.createElement('li');
@@ -307,7 +350,7 @@ function leaderboardRow(entry, i) {
   dot.className = 'dot';
   dot.style.background = entry.color;
   const name = document.createElement('span');
-  name.textContent = `${i + 1}. ${entry.name}`;
+  name.textContent = `${entry.rank ?? i + 1}. ${entry.name}`;
   const pts = document.createElement('span');
   pts.className = 'score';
   pts.textContent = entry.score;
@@ -315,46 +358,88 @@ function leaderboardRow(entry, i) {
   return li;
 }
 
-function showOverlay({ title, message, button, board = false }) {
+function showOverlay({ title, message, button, board = false, shop = false }) {
   ui.title.textContent = title;
   ui.message.textContent = message;
   ui.action.textContent = button;
-  ui.board.replaceChildren(...(board ? scores.top(5).map(leaderboardRow) : []));
+  ui.board.replaceChildren();
+  if (board) loadBoard();
+  renderShop(shop);
   ui.overlay.hidden = false;
 }
 
-function showIdle() {
-  if (!user) {
-    showOverlay({
-      title: 'Forest Hunter',
-      message: 'Sign in with your start.ng account to hunt. Your hunter wears your start.ng style.',
-      button: 'Sign in on start.ng',
+// Spend coins on upgrades between rounds.
+function renderShop(show) {
+  ui.shop.replaceChildren();
+  if (!show || !user) return;
+  const head = document.createElement('div');
+  head.className = 'shop-head';
+  head.textContent = `Upgrades · ${prog.coins} coins`;
+  ui.shop.append(head);
+  for (const u of UPGRADES) {
+    const rank = prog.up[u.id];
+    const cost = u.cost(rank);
+    const row = document.createElement('div');
+    row.className = 'shop-row';
+    const info = document.createElement('span');
+    info.innerHTML = `<b>${u.name}</b> <small>rank ${rank}/${MAX_RANK}</small><br><small>${u.desc}</small>`;
+    const btn = document.createElement('button');
+    btn.className = 'buy';
+    btn.textContent = rank >= MAX_RANK ? 'Max' : `Buy ${cost}`;
+    btn.disabled = rank >= MAX_RANK || prog.coins < cost;
+    btn.addEventListener('click', () => {
+      prog.coins -= cost;
+      prog.up[u.id]++;
+      progress.save(user.id, prog);
+      updateHud();
+      renderShop(true);
     });
-  } else {
-    showOverlay({
-      title: 'Forest Hunter',
-      message: `Hi ${user.displayName}! You have ${ROUND_TIME} seconds and ${AMMO} shots. Zoom in to identify an animal first. Protected species cost you points.`,
-      button: 'Start hunting',
-      board: true,
-    });
+    row.append(info, btn);
+    ui.shop.append(row);
   }
 }
 
+function showIdle() {
+  if (!user) return;
+  const note = user.signedIn ? '' : ' You are playing as a guest: sign in to save your score to the leaderboard.';
+  showOverlay({
+    title: 'Forest Hunter',
+    message: `Level ${prog.level}: ${describe(lvl.mission)}. You have ${lvl.diff.time} seconds and ${shots()} shots. Zoom in to identify an animal first. Protected species cost you points.${note}`,
+    button: `Start level ${prog.level}`,
+    board: true,
+    shop: true,
+  });
+}
+
 function primaryAction() {
-  if (!user) window.open('startng.html', 'startng');
-  else if (state === 'paused') resume();
+  if (!user) return;
+  if (state === 'paused') resume();
   else if (state !== 'running' && time - overAt > 0.5) start();
 }
 
 function refreshUser(u) {
   const switched = (u?.id ?? null) !== (user?.id ?? null);
   user = u;
-  hero.applyStyle(u?.style); // default look when signed out
-  ui.avatar.style.background = u?.style.primaryColor ?? '#555';
-  ui.avatar.textContent = u ? u.displayName[0].toUpperCase() : '?';
-  ui.username.textContent = u ? u.displayName : 'Not signed in';
-  ui.best.textContent = u ? scores.getBest(u.id) : 0;
   if (switched) {
+    prog = u ? progress.get(u.id) : progress.fresh();
+    lvl = buildLevel(prog.level);
+  }
+  hero.applyStyle(u?.style); // null style = default look
+  ui.avatar.style.background = u?.face ? `center / cover url("${u.face}")` : (u?.style?.primaryColor ?? '#555');
+  ui.avatar.textContent = u?.face ? '' : (u?.displayName?.[0] ?? '?').toUpperCase();
+  ui.username.textContent = u?.displayName ?? 'Loading…';
+  ui.best.textContent = u ? scores.getBest(u.id) : 0;
+  if (u?.signedIn) {
+    ui.auth.textContent = 'Edit style on start.ng ↗';
+    ui.auth.href = 'https://start.ng';
+    ui.auth.target = '_blank';
+  } else {
+    ui.auth.textContent = 'Sign in to save scores';
+    ui.auth.href = platform.signInUrl();
+    ui.auth.removeAttribute('target');
+  }
+  if (switched) {
+    spawnAnimals();
     resetRound();
     state = 'ready';
     showIdle();
@@ -452,8 +537,9 @@ function movePlayer(dt, zoomed) {
   }
   walkTime += dt * (sprint ? 10 : 7);
   // Animals notice you when you move close to them. Standing still keeps you hidden.
-  const radius = sprint ? SPOOK.sprint : zoomed ? SPOOK.creep : SPOOK.walk;
+  const base = (sprint ? SPOOK.sprint : zoomed ? SPOOK.creep : SPOOK.walk) * lvl.diff.skit * (1 - 0.1 * prog.up.stealth);
   for (const a of animals) {
+    const radius = base * (a.d.rare ? 1.6 : 1); // the White Stag is extra skittish
     if (!a.dead && a.fleeing <= 0.5 && a.g.position.distanceTo(player) < radius) flee(a);
   }
 }
@@ -483,7 +569,7 @@ function step(dt) {
   hero.root.visible = !hunting;
   if (hunting) {
     fov += ((zoomed ? SCOPE_FOV : FOV) - fov) * Math.min(1, dt * 10);
-    const sway = zoomed ? (steady ? 0.0004 : 0.0028) : 0; // hold Shift to steady the scope
+    const sway = zoomed ? (steady ? 0.0004 : 0.0028) * (1 - 0.15 * prog.up.scope) : 0; // hold Shift to steady the scope
     const moving = state === 'running' && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || touchWalk);
     camera.position.set(player.x, player.y + (moving && !zoomed ? Math.sin(walkTime) * 0.04 : 0), player.z);
     camera.rotation.set(pitch + Math.sin(time * 1.7) * sway, yaw + Math.sin(time * 1.1) * sway, 0);

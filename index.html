@@ -16,13 +16,14 @@
   <div id="dot"></div>
   <div id="label"></div>
   <div id="msg"></div>
+  <div id="mission"></div>
 
   <header class="hud">
     <div class="user">
       <span class="avatar" id="avatar">?</span>
       <div>
         <div class="name" id="username">Loading…</div>
-        <a class="link" href="startng.html" target="startng">Edit style on start.ng ↗</a>
+        <a class="link" id="authlink" href="https://start.ng">start.ng</a>
       </div>
     </div>
     <div class="stats">
@@ -30,6 +31,8 @@
       <div><span class="label">Ammo</span><span id="ammo">15</span></div>
       <div><span class="label">Time</span><span id="time">90</span></div>
       <div><span class="label">Best</span><span id="best">0</span></div>
+      <div><span class="label">Level</span><span id="level">1</span></div>
+      <div><span class="label">Coins</span><span id="coins">0</span></div>
     </div>
   </header>
 
@@ -42,6 +45,7 @@
       <h1 id="title">Forest Hunter</h1>
       <p id="message"></p>
       <button class="btn" id="action">Play</button>
+      <div class="shop" id="shop"></div>
       <ol class="board" id="board"></ol>
       <p class="hint">Mouse look (click to lock) · WASD walk · Shift sprint · click to shoot · hold right-click or Z to zoom (Shift steadies the scope) · arrows look, Space shoots · touch: drag, tap, Walk and Zoom buttons</p>
     </div>
