@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import * as platform from './platform.js';
-import * as scores from './scores.js';
 import { createCharacter } from './character.js';
 import { SPECIES, createAnimal } from './animals.js';
 import * as progress from './progress.js';
@@ -22,12 +21,12 @@ const ui = {
   score: $('score'), ammo: $('ammo'), time: $('time'), best: $('best'),
   overlay: $('overlay'), title: $('title'), message: $('message'), action: $('action'), board: $('board'),
   scope: $('scope'), dot: $('dot'), label: $('label'), msg: $('msg'), zoomBtn: $('zoomBtn'), walkBtn: $('walkBtn'),
-  auth: $('authlink'), level: $('level'), coins: $('coins'), mission: $('mission'), shop: $('shop'),
+  auth: $('authlink'), lives: $('lives'), level: $('level'), coins: $('coins'), mission: $('mission'), shop: $('shop'),
 };
 
 // Field guide (bottom-left)
 $('guide').innerHTML = '<b>Field guide</b>' + SPECIES.map((d) =>
-  `<div class="${d.protected ? 'bad' : ''}">${d.name}${d.protected ? ' (protected)' : ''}<span class="pts">${d.points > 0 ? '+' : ''}${d.points}</span></div>`).join('');
+  `<div class="${d.protected ? 'bad' : ''}">${d.name}${d.protected ? ' (protected)' : ''}<span class="pts">${d.points > 0 ? '+' : ''}${d.points}${d.special ? ' ♥' : ''}</span></div>`).join('');
 
 // --- Scene -----------------------------------------------------------------
 
@@ -117,13 +116,13 @@ function spawnAnimals() {
   for (const a of animals) scene.remove(a.g);
   animals = [];
   for (const d of SPECIES) {
-    const count = d.rare ? (lvl.stag ? 1 : 0) : d.protected ? lvl.diff.wolves : d.count;
+    const count = d.special ? (lvl.fox ? 1 : 0) : d.rare ? (lvl.stag ? 1 : 0) : d.protected ? lvl.diff.wolves : d.count;
     for (let i = 0; i < count; i++) {
       const { g, legs } = createAnimal(d);
       const t = Math.random() * Math.PI * 2;
-      const r = d.rare ? 35 + Math.random() * 40 : 18 + Math.random() * 50;
+      const r = d.rare || d.special ? 30 + Math.random() * 35 : 18 + Math.random() * 50;
       g.position.set(Math.cos(t) * r, 0, Math.sin(t) * r);
-      const a = { g, legs, d, fleeing: 0, wait: Math.random() * 3, dead: false, deadFor: 0, tx: 0, tz: 0 };
+      const a = { g, legs, d, fleeing: 0, wait: Math.random() * 3, dead: false, deadFor: 0, ttl: 25, tx: 0, tz: 0 };
       g.userData.animal = a;
       wander(a);
       scene.add(g);
@@ -140,6 +139,16 @@ function updateAnimals(dt, time) {
       a.g.rotation.z = Math.min(a.deadFor * 4, 1.5); // topple over
       if (a.deadFor > 2) a.g.visible = false;
       continue;
+    }
+    if (a.d.special && state === 'running') { // the Golden Fox only hangs around for 25 s
+      a.ttl -= dt;
+      if (a.ttl <= 0) {
+        a.dead = true;
+        a.deadFor = 99;
+        a.g.visible = false;
+        say('The Golden Fox got away!', 'bad');
+        continue;
+      }
     }
     if (a.wait > 0) {
       a.wait -= dt;
@@ -237,6 +246,8 @@ function updateHud() {
   ui.time.textContent = Math.ceil(left);
   ui.level.textContent = prog.level;
   ui.coins.textContent = prog.coins;
+  ui.lives.textContent = '♥'.repeat(prog.lives);
+  ui.best.textContent = Math.max(0, prog.runScore + (score || 0)); // run total, carried across levels
   ui.mission.textContent = `Level ${prog.level} · ${describe(lvl.mission)}`;
 }
 
@@ -275,22 +286,47 @@ function end() {
   const goal = describe(lvl.mission);
   const earned = reward(oldLevel, score, cleared);
   prog.coins += earned;
-  if (cleared) prog.level++;
+  prog.runScore += Math.max(score, 0); // the run total carries on across levels
+  let reached = oldLevel;
+  let title, extra = '', button;
+  if (cleared) {
+    prog.level++;
+    reached = prog.level;
+    title = `Level ${oldLevel} cleared!`;
+    button = `Start level ${prog.level}`;
+    if (oldLevel % 5 === 0) { // boss levels give a checkpoint and a life
+      prog.checkpoint = prog.level;
+      if (prog.lives < progress.MAX_LIVES) { prog.lives++; extra = ' Boss cleared: +1 life and a checkpoint.'; }
+      else extra = ' Boss cleared: checkpoint saved.';
+    }
+  } else {
+    prog.lives--;
+    title = `Level ${oldLevel} failed`;
+    button = 'Retry level';
+    extra = ` Goal was: ${goal}. Lives left: ${'♥'.repeat(Math.max(prog.lives, 0))}.`;
+  }
+  const finalRun = prog.runScore;
+  if (prog.lives <= 0) { // out of lives: the run is over, restart from the last checkpoint
+    title = 'Run over';
+    button = 'New run';
+    extra = ` Final run score ${finalRun}, level ${reached}. Starting again from level ${prog.checkpoint} with ${progress.START_LIVES} lives.`;
+    prog.level = prog.checkpoint;
+    prog.lives = progress.START_LIVES;
+    prog.runScore = 0;
+  }
   progress.save(user.id, prog);
-  const { best } = scores.submit(user, score);
-  ui.best.textContent = best;
   ui.scope.hidden = true;
   ui.label.textContent = '';
   lvl = buildLevel(prog.level); // next level, or a fresh mission for a retry
   updateHud();
   showOverlay({
-    title: cleared ? `Level ${oldLevel} cleared!` : `Level ${oldLevel} failed`,
-    message: `${user.displayName}: ${score} points, ${bagged} bagged${protectedHits ? ` (${protectedHits} protected)` : ''}. +${earned} coins.${cleared ? '' : ` Goal was: ${goal}.`}`,
-    button: cleared ? `Start level ${prog.level}` : 'Retry level',
+    title,
+    message: `${user.displayName}: ${score} points this round (${bagged} bagged${protectedHits ? `, ${protectedHits} protected` : ''}). +${earned} coins.${extra}`,
+    button,
     board: false,
     shop: true,
   });
-  saveRun(score, prog.level).then(loadBoard);
+  saveRun(finalRun, reached).then(loadBoard);
 }
 
 function shoot() {
@@ -310,11 +346,16 @@ function shoot() {
     a.deadFor = 0;
     score += pts;
     bagged++;
+    let extra = '';
+    if (a.d.special) { // the Golden Fox: an extra life (or coins if you're already full)
+      if (prog.lives < progress.MAX_LIVES) { prog.lives++; extra = ' · +1 life'; } else { prog.coins += 50; extra = ' · +50 coins'; }
+      progress.save(user.id, prog);
+    }
     if (a.d.protected) {
       protectedHits++;
       say(`Protected ${a.d.name}! ${pts}`, 'bad');
     } else {
-      say(`${a.d.name} +${pts}${dist >= 20 ? ` · ${Math.round(dist)} m` : ''}`, 'good');
+      say(`${a.d.name} +${pts}${dist >= 20 ? ` · ${Math.round(dist)} m` : ''}${extra}`, 'good');
     }
   }
   streak = a && !a.d.protected ? streak + 1 : 0;
@@ -353,7 +394,7 @@ function leaderboardRow(entry, i) {
   name.textContent = `${entry.rank ?? i + 1}. ${entry.name}`;
   const pts = document.createElement('span');
   pts.className = 'score';
-  pts.textContent = entry.score;
+  pts.textContent = entry.stats?.level ? `Lv ${entry.stats.level} · ${entry.score}` : entry.score;
   li.append(dot, name, pts);
   return li;
 }
@@ -397,6 +438,24 @@ function renderShop(show) {
     row.append(info, btn);
     ui.shop.append(row);
   }
+  const lifeCost = 150;
+  const lifeRow = document.createElement('div');
+  lifeRow.className = 'shop-row';
+  const lifeInfo = document.createElement('span');
+  lifeInfo.innerHTML = `<b>Extra life</b> <small>${prog.lives}/${progress.MAX_LIVES}</small><br><small>+1 life for this run</small>`;
+  const lifeBtn = document.createElement('button');
+  lifeBtn.className = 'buy';
+  lifeBtn.textContent = prog.lives >= progress.MAX_LIVES ? 'Full' : `Buy ${lifeCost}`;
+  lifeBtn.disabled = prog.lives >= progress.MAX_LIVES || prog.coins < lifeCost;
+  lifeBtn.addEventListener('click', () => {
+    prog.coins -= lifeCost;
+    prog.lives++;
+    progress.save(user.id, prog);
+    updateHud();
+    renderShop(true);
+  });
+  lifeRow.append(lifeInfo, lifeBtn);
+  ui.shop.append(lifeRow);
 }
 
 function showIdle() {
@@ -404,7 +463,7 @@ function showIdle() {
   const note = user.signedIn ? '' : ' You are playing as a guest: sign in to save your score to the leaderboard.';
   showOverlay({
     title: 'Forest Hunter',
-    message: `Level ${prog.level}: ${describe(lvl.mission)}. You have ${lvl.diff.time} seconds and ${shots()} shots. Zoom in to identify an animal first. Protected species cost you points.${note}`,
+    message: `Level ${prog.level}: ${describe(lvl.mission)}. You have ${lvl.diff.time} seconds and ${shots()} shots. Zoom in to identify an animal first. Protected species cost you points. Lives: ${'♥'.repeat(prog.lives)} · run score ${prog.runScore}.${note}`,
     button: `Start level ${prog.level}`,
     board: true,
     shop: true,
@@ -428,7 +487,6 @@ function refreshUser(u) {
   ui.avatar.style.background = u?.face ? `center / cover url("${u.face}")` : (u?.style?.primaryColor ?? '#555');
   ui.avatar.textContent = u?.face ? '' : (u?.displayName?.[0] ?? '?').toUpperCase();
   ui.username.textContent = u?.displayName ?? 'Loading…';
-  ui.best.textContent = u ? scores.getBest(u.id) : 0;
   if (u?.signedIn) {
     ui.auth.textContent = 'Edit style on start.ng ↗';
     ui.auth.href = 'https://start.ng';
@@ -539,7 +597,7 @@ function movePlayer(dt, zoomed) {
   // Animals notice you when you move close to them. Standing still keeps you hidden.
   const base = (sprint ? SPOOK.sprint : zoomed ? SPOOK.creep : SPOOK.walk) * lvl.diff.skit * (1 - 0.1 * prog.up.stealth);
   for (const a of animals) {
-    const radius = base * (a.d.rare ? 1.6 : 1); // the White Stag is extra skittish
+    const radius = base * (a.d.rare ? 1.6 : a.d.special ? 2 : 1); // the White Stag and Golden Fox are extra skittish
     if (!a.dead && a.fleeing <= 0.5 && a.g.position.distanceTo(player) < radius) flee(a);
   }
 }

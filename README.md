@@ -2,7 +2,7 @@
 
 A small three.js first-person hunting game for [start.ng](https://start.ng). Scan the forest for animals, zoom in with the scope to identify them, and shoot before the timer or your ammo runs out. The game is endless: every level has a mission and gets harder, rounds pay coins, and coins buy upgrades.
 
-There are 10 species, each with its own points and speed. **The wolf is protected: shooting one costs you 50 points.** The rare **White Stag** is worth 150. Trees block your shot and your path. Animals bolt when you fire nearby or when you get too close while moving, so stalk slowly.
+There are 11 species, each with its own points and speed. **The wolf is protected: shooting one costs you 50 points.** The rare **White Stag** is worth 150, and the fast, skittish **Golden Fox** (worth 300) vanishes after 25 seconds but gives you an **extra life**. Trees block your shot and your path. Animals bolt when you fire nearby or when you get too close while moving, so stalk slowly.
 
 ## Run locally
 
@@ -40,12 +40,16 @@ Each level has a mission, and everything gets harder as you climb: animals run f
 | Clean | Score 90 without hitting a protected animal |
 | Boss (every 5th level) | Find and bag the rare **White Stag** |
 
-Clear the mission before time or ammo runs out to move up. If you fail you retry the level with a new mission. Hits earn bonus points for distance (+2 per 10 m) and for running targets (+10). Coins buy four upgrades (up to rank 5): Steady scope, Extra ammo, Soft steps and Quick bolt. Level, coins and upgrades are saved per player in the browser (`localStorage`).
+Clear the mission before time or ammo runs out to move up. If you fail you retry the level with a new mission. Hits earn bonus points for distance (+2 per 10 m) and for running targets (+10). Coins buy four upgrades (up to rank 5): Steady scope, Extra ammo, Soft steps and Quick bolt. Level, coins, upgrades, lives and the run score are saved per player in the browser (`localStorage`).
+
+### Lives and runs
+
+A **run** starts with 3 lives (max 5). Failing a level costs a life, and at 0 the run is over: you restart from the last checkpoint (the level after a cleared boss) with 3 lives, keeping your coins and upgrades. Clearing a boss level gives +1 life and a checkpoint, shooting the Golden Fox gives +1 life, and the shop sells extra lives. Your score **carries on across levels** within a run.
 
 ## start.ng
 
 - **Player and character:** `src/platform.js` asks start.ng's connect page who is playing (`startng:whoami`) and dresses the hunter in their character style. Guests get start.ng's guest look.
-- **Leaderboard:** `startng.json` defines two columns, "Best score" and "Level reached". When a signed-in player finishes a round, `saveScore` sends `{ score, level }`, and the end screen shows the top 5.
+- **Leaderboard:** `startng.json` defines two columns, "Total score" (the whole run, carried across levels) and "Level reached". After every round a signed-in player's run total and level are sent with `saveScore`, and the end screen shows the top 5 with their levels.
 - **Cover:** `cover.png` (16:10) is the card picture on start.ng.
 
 ### Publish and update
@@ -63,8 +67,7 @@ Clear the mission before time or ammo runs out to move up. If you fail you retry
 | `src/game.js` | The game: scene, aiming, rounds, input, HUD, shop. |
 | `src/animals.js` | The `SPECIES` list (points, speed, size, count, protected, rare) and `createAnimal`. |
 | `src/levels.js` | Level difficulty, missions and upgrade costs. |
-| `src/progress.js` | Per-player level, coins and upgrades in `localStorage`. |
-| `src/scores.js` | Personal best in `localStorage`. |
+| `src/progress.js` | Per-player level, coins, upgrades, lives and run score in `localStorage`. |
 | `src/character.js` | Builds the hunter and applies a start.ng style. |
 | `src/platform.js` | All start.ng calls (player, scores, leaderboard). |
 | `startng.json` | Leaderboard columns. |

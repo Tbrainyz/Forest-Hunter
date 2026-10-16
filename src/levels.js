@@ -44,6 +44,7 @@ export function buildLevel(lv) {
   return {
     level: lv,
     diff: difficulty(lv),
+    fox: lv >= 2 && Math.random() < Math.min(0.6, 0.3 + 0.03 * lv), // the Golden Fox (extra life) turns up now and then
     stag: boss || Math.random() < 0.3, // the rare White Stag may also turn up on other levels (+150 points)
     mission: { type, species, goal: goals[type], progress: 0, done: false, failed: false },
   };

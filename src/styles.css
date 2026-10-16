@@ -149,3 +149,6 @@ body { background: var(--bg); }
 .buy { margin: 0; padding: 6px 14px; font-size: 14px; border-radius: 8px; white-space: nowrap; }
 .buy:disabled { opacity: 0.4; cursor: default; }
 .overlay .panel { max-height: 92vh; overflow-y: auto; }
+
+.stats { flex-wrap: wrap; justify-content: flex-end; }
+#lives { color: var(--bad); }

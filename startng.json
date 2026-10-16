@@ -1,8 +1,16 @@
 {
   "leaderboard": {
     "stats": [
-      { "key": "score", "label": "Best score", "order": "highest" },
-      { "key": "level", "label": "Level reached", "order": "highest" }
+      {
+        "key": "score",
+        "label": "Total score",
+        "order": "highest"
+      },
+      {
+        "key": "level",
+        "label": "Level reached",
+        "order": "highest"
+      }
     ]
   }
 }
