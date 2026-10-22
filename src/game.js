@@ -21,7 +21,7 @@ const ui = {
   score: $('score'), ammo: $('ammo'), time: $('time'), best: $('best'),
   overlay: $('overlay'), title: $('title'), message: $('message'), action: $('action'), board: $('board'),
   scope: $('scope'), dot: $('dot'), label: $('label'), msg: $('msg'), zoomBtn: $('zoomBtn'), walkBtn: $('walkBtn'),
-  auth: $('authlink'), lives: $('lives'), level: $('level'), coins: $('coins'), mission: $('mission'), shop: $('shop'),
+  auth: $('authlink'), share: $('share'), lives: $('lives'), level: $('level'), coins: $('coins'), mission: $('mission'), shop: $('shop'),
 };
 
 // Field guide (bottom-left)
@@ -325,6 +325,7 @@ function end() {
     button,
     board: false,
     shop: true,
+    shareText: `I reached level ${reached} with a run score of ${finalRun} on Forest Hunter! Can you beat me?`,
   });
   saveRun(finalRun, reached).then(loadBoard);
 }
@@ -372,6 +373,16 @@ function shoot() {
 
 // --- Overlay / HUD ---------------------------------------------------------------
 
+// Share-on-X (game standard): opens an X post with the result and a link to the game's start.ng page.
+const GAME_NAME = location.hostname.endsWith('.start.ng') ? location.hostname.split('.')[0] : 'forest-hunter';
+function setShare(text) {
+  ui.share.hidden = !text;
+  ui.share.onclick = text ? () => {
+    const post = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(`https://start.ng/games/${GAME_NAME}`)}`;
+    window.open(post, '_blank', 'noopener');
+  } : null;
+}
+
 // The shared leaderboard comes from start.ng (empty when the game isn't running on start.ng).
 async function loadBoard() {
   const entries = await platform.getLeaderboard(5);
@@ -399,7 +410,8 @@ function leaderboardRow(entry, i) {
   return li;
 }
 
-function showOverlay({ title, message, button, board = false, shop = false }) {
+function showOverlay({ title, message, button, board = false, shop = false, shareText = null }) {
+  setShare(shareText);
   ui.title.textContent = title;
   ui.message.textContent = message;
   ui.action.textContent = button;
@@ -460,7 +472,8 @@ function renderShop(show) {
 
 function showIdle() {
   if (!user) return;
-  const note = user.signedIn ? '' : ' You are playing as a guest: sign in to save your score to the leaderboard.';
+  const guestChoice = new URLSearchParams(location.search).has('guest'); // picked "play as a guest" on start.ng
+  const note = user.signedIn || guestChoice ? '' : ' You are playing as a guest: sign in to save your score to the leaderboard.';
   showOverlay({
     title: 'Forest Hunter',
     message: `Level ${prog.level}: ${describe(lvl.mission)}. You have ${lvl.diff.time} seconds and ${shots()} shots. Zoom in to identify an animal first. Protected species cost you points. Lives: ${'♥'.repeat(prog.lives)} · run score ${prog.runScore}.${note}`,
